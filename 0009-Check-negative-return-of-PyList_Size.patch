@@ -1,0 +1,44 @@
+From 11a7ff7eeefe763be9ade949e8f2a4a2d53f6129 Mon Sep 17 00:00:00 2001
+From: Jakub Hrozek <jakub.hrozek@posteo.se>
+Date: Mon, 24 Sep 2018 20:51:51 +0200
+Subject: [PATCH 09/12] Check negative return of PyList_Size
+
+Merges:
+https://pagure.io/libuser/issue/28
+
+In case of an error, PyList_Size can return a negative value. We should
+check that case, also to avoid compiler warnings like:
+
+Error: COMPILER_WARNING: [#def41] [warning: defect not occurring in libuser-0.60-9.el7]
+libuser-0.62/python/misc.c: scope_hint: In function 'libuser_admin_prompt'
+libuser-0.62/python/misc.c:160:12: warning: argument 1 range [9223372036854775808, 18446744073709551615] exceeds maximum object size 9223372036854775807 [-Walloc-size-larger-than=]
+/usr/include/glib-2.0/glib/glist.h:32: included_from: Included from here.
+/usr/include/glib-2.0/glib/ghash.h:33: included_from: Included from here.
+/usr/include/glib-2.0/glib.h:50: included_from: Included from here.
+libuser-0.62/python/misc.c:25: included_from: Included from here.
+/usr/include/glib-2.0/glib/gmem.h:96:10: note: in a call to allocation function 'g_malloc0_n' declared here
+---
+ python/misc.c | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/python/misc.c b/python/misc.c
+index c4ce819..fcb0ccf 100644
+--- a/python/misc.c
++++ b/python/misc.c
+@@ -137,7 +137,12 @@ libuser_admin_prompt(struct libuser_admin *self, PyObject * args,
+ 		return NULL;
+ 	}
+ 	count = PyList_Size(list);
+-	if (count > INT_MAX) {
++	if (count < 0) {
++		PyErr_SetString(PyExc_TypeError,
++				"prompt_list has no size; probably not a list");
++		DEBUG_EXIT;
++		return NULL;
++	} else if (count > INT_MAX) {
+ 		PyErr_SetString(PyExc_ValueError, "too many prompts");
+ 		DEBUG_EXIT;
+ 		return NULL;
+-- 
+1.8.3.1
+

@@ -1,0 +1,33 @@
+From e5536845298b6672a16e5866a823fcf6562c6cf3 Mon Sep 17 00:00:00 2001
+From: Jakub Hrozek <jakub.hrozek@posteo.se>
+Date: Wed, 26 Sep 2018 21:15:38 +0200
+Subject: [PATCH 12/12] editing_open: close fd after we've established its
+ validity
+
+Merges:
+https://pagure.io/libuser/issue/26
+
+The code used to first close(fd) and only then check if it's != -1.
+Reverse the logic so that the fd is only closed if valid.
+---
+ modules/files.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/modules/files.c b/modules/files.c
+index 8c2a282..b8bf8a6 100644
+--- a/modules/files.c
++++ b/modules/files.c
+@@ -387,9 +387,9 @@ editing_open(struct lu_module *module, const char *file_suffix,
+ 	backup_name = g_strconcat(e->filename, "-", NULL);
+ 	fd = open_and_copy_file(e->filename, backup_name, FALSE, error);
+ 	g_free (backup_name);
+-	close(fd);
+ 	if (fd == -1)
+ 		goto err_fscreate;
++	close(fd);
+ 
+ 	e->new_filename = g_strconcat(e->filename, "+", NULL);
+ 	e->new_fd = open_and_copy_file(e->filename, e->new_filename, TRUE,
+-- 
+1.8.3.1
+

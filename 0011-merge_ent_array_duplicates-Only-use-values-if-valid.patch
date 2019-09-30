@@ -1,0 +1,56 @@
+From 8da7fc83aa3e9fd868c6a8da9261b72dae7d29e7 Mon Sep 17 00:00:00 2001
+From: Jakub Hrozek <jakub.hrozek@posteo.se>
+Date: Wed, 26 Sep 2018 21:38:02 +0200
+Subject: [PATCH 11/12] merge_ent_array_duplicates: Only use values if valid
+
+Merges:
+https://pagure.io/libuser/issue/22
+
+Don't attempt to dereference a NULL pointer
+---
+ lib/user.c | 22 ++++++++++++++--------
+ 1 file changed, 14 insertions(+), 8 deletions(-)
+
+diff --git a/lib/user.c b/lib/user.c
+index ad2bb09..2500565 100644
+--- a/lib/user.c
++++ b/lib/user.c
+@@ -691,10 +691,13 @@ merge_ent_array_duplicates(GPtrArray *array)
+ 			while (attributes != NULL) {
+ 				attr = (const char *)attributes->data;
+ 				values = lu_ent_get_current(current, attr);
+-				for (j = 0; j < values->n_values; j++) {
+-					value = g_value_array_get_nth(values,
+-								      j);
+-					lu_ent_add_current(saved, attr, value);
++				if (values != NULL) {
++					for (j = 0; j < values->n_values; j++) {
++						value = g_value_array_get_nth(
++									values,
++									j);
++						lu_ent_add_current(saved, attr, value);
++					}
+ 				}
+ 				attributes = g_list_next(attributes);
+ 			}
+@@ -705,10 +708,13 @@ merge_ent_array_duplicates(GPtrArray *array)
+ 			while (attributes != NULL) {
+ 				attr = (const char *)attributes->data;
+ 				values = lu_ent_get(current, attr);
+-				for (j = 0; j < values->n_values; j++) {
+-					value = g_value_array_get_nth(values,
+-								      j);
+-					lu_ent_add(saved, attr, value);
++				if (values != NULL) {
++					for (j = 0; j < values->n_values; j++) {
++						value = g_value_array_get_nth(
++									values,
++									j);
++						lu_ent_add(saved, attr, value);
++					}
+ 				}
+ 				attributes = g_list_next(attributes);
+ 			}
+-- 
+1.8.3.1
+

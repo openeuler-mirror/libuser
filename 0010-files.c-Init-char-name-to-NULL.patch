@@ -1,0 +1,60 @@
+From 7acf0fad0ca468f33f86084f36251df5baf3dc94 Mon Sep 17 00:00:00 2001
+From: Jakub Hrozek <jakub.hrozek@posteo.se>
+Date: Wed, 26 Sep 2018 21:01:59 +0200
+Subject: [PATCH 10/12] files.c: Init char *name to NULL
+
+Merges:
+https://pagure.io/libuser/issue/27
+
+This is mostly to silence coverity warnings. "enum lu_entity_type" has
+three values and several places in the code follow logic as:
+
+char *name;
+if ent->type == user:
+        name = foo()
+if ent->type == group
+        name = bar()
+g_assert(name != NULL)
+
+it shouldn't be possible for ent->type to be anything else but in the
+odd case it is, initializing name to NULL will ensure that name will be
+still NULL after the code falls through the conditions and at least the
+behaviour is defined.
+---
+ modules/files.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/modules/files.c b/modules/files.c
+index 6a7787e..8c2a282 100644
+--- a/modules/files.c
++++ b/modules/files.c
+@@ -1501,7 +1501,7 @@ generic_lock(struct lu_module *module, const char *file_suffix, int field,
+ 	     struct lu_ent *ent, enum lock_op op, struct lu_error **error)
+ {
+ 	struct editing *e;
+-	char *value, *new_value, *name;
++	char *value, *new_value, *name = NULL;
+ 	gboolean commit = FALSE, ret = FALSE;
+ 
+ 	/* Get the name which keys the entries of interest in the file. */
+@@ -1561,7 +1561,7 @@ generic_is_locked(struct lu_module *module, const char *file_suffix,
+ 		  int field, struct lu_ent *ent, struct lu_error **error)
+ {
+ 	char *filename;
+-	char *value, *name;
++	char *value, *name = NULL;
+ 	int fd;
+ 	gboolean ret = FALSE;
+ 
+@@ -1752,7 +1752,7 @@ generic_setpass(struct lu_module *module, const char *file_suffix, int field,
+ 		struct lu_error **error)
+ {
+ 	struct editing *e;
+-	char *value, *name;
++	char *value, *name = NULL;
+ 	gboolean ret = FALSE;
+ 
+ 	/* Get the name of this account. */
+-- 
+1.8.3.1
+
