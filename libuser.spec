@@ -1,18 +1,18 @@
-Name    : libuser
-Version : 0.62
-Release : 20
-Summary : A user and group account administration library
-License : LGPLv2+
-URL     : https://pagure.io/libuser
-Source  : http://releases.pagure.org/libuser/libuser-%{version}.tar.xz
+Name:    libuser
+Version: 0.62
+Release: 21
+Summary: A user and group account administration library
+License: LGPLv2+
+URL:     https://pagure.io/libuser
+Source:  http://releases.pagure.org/libuser/libuser-%{version}.tar.xz
 
-# Patch1 : this patch is from fedora.
-Patch1   :    0001-Fix-errors-with-Werror-format-security.patch
-
-Patch9000:    0009-Check-negative-return-of-PyList_Size.patch
-Patch9001:    0010-files.c-Init-char-name-to-NULL.patch
-Patch9002:    0011-merge_ent_array_duplicates-Only-use-values-if-valid.patch
-Patch9003:    0012-editing_open-close-fd-after-we-ve-established-its-va.patch
+# Patch0 : this patch is from fedora.
+Patch0:    0001-Fix-errors-with-Werror-format-security.patch
+Patch1:    0009-Check-negative-return-of-PyList_Size.patch
+Patch2:    0010-files.c-Init-char-name-to-NULL.patch
+Patch3:    0011-merge_ent_array_duplicates-Only-use-values-if-valid.patch
+Patch4:    0012-editing_open-close-fd-after-we-ve-established-its-va.patch
+Patch5:    libuser-do-not-use-deprecated-flask.h-and-av_permissions.patch
 
 BuildRequires: cyrus-sasl-devel, nscd, linuxdoc-tools, pam-devel, popt-devel, gcc
 BuildRequires: libselinux-devel, openldap-devel, python3-devel, glib2-devel, gdb
@@ -65,11 +65,12 @@ Man pages and other related documents for %{name}
 %setup -qc
 
 pushd libuser-%{version}
+%patch0 -p1
 %patch1 -p1
-%patch9000 -p1
-%patch9001 -p1
-%patch9002 -p1
-%patch9003 -p1
+%patch2 -p1
+%patch3 -p1
+%patch4 -p1
+%patch5 -p1
 popd
 
 cp -dpR libuser-%{version} python2 || :
@@ -151,6 +152,9 @@ make -C python2 install DESTDIR=$RPM_BUILD_ROOT INSTALL='install -p' || :
 %{_mandir}/man5/*
 
 %changelog
+* Mon Sep 21 2020 Liquor <lirui130@huawei.com> - 0.62-21
+- do not use deprecated flask.h and av_permissions.h
+
 * Sat Mar 21 2020 chengquan<chengquan3@huawei.com> - 0.62-20
 - add necessary BuildRequires
 
