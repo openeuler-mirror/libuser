@@ -1,6 +1,6 @@
 Name:    libuser
 Version: 0.62
-Release: 21
+Release: 22
 Summary: A user and group account administration library
 License: LGPLv2+
 URL:     https://pagure.io/libuser
@@ -16,7 +16,7 @@ Patch5:    libuser-do-not-use-deprecated-flask.h-and-av_permissions.patch
 
 BuildRequires: cyrus-sasl-devel, nscd, linuxdoc-tools, pam-devel, popt-devel, gcc
 BuildRequires: libselinux-devel, openldap-devel, python3-devel, glib2-devel, gdb
-BuildRequires: python2-devel, fakeroot, openldap-clients, openldap-servers, openssl
+BuildRequires: fakeroot, openldap-clients, openldap-servers, openssl
 
 %description
 The libuser library implements a standardized interface for manipulating
@@ -32,18 +32,6 @@ Requires: %{name}%{?_isa} = %{version}-%{release}
 %description devel
 The package contains lib and header files for developing application
 that use %{name}
-
-%package -n python2-libuser
-Summary: the libuser library used for binding Python 2
-%{?python_provide:%python_provide python2-libuser}
-Requires: libuser%{?_isa} = %{version}-%{release}
-Provides: %{name}-python = %{version}-%{release}
-Provides: %{name}-python%{?_isa} = %{version}-%{release}
-
-%description -n python2-libuser
-The libuser library which provides a Python 2 API implements a
-standardized interface for manipulating and administering user
-and group accounts.
 
 %package python3
 Summary: the libuser library used for binding Python 3
@@ -62,41 +50,21 @@ Requires:       man, info
 Man pages and other related documents for %{name}
 
 %prep
-%setup -qc
-
-pushd libuser-%{version}
+%setup -qn libuser-%{version}
 %patch0 -p1
 %patch1 -p1
 %patch2 -p1
 %patch3 -p1
 %patch4 -p1
 %patch5 -p1
-popd
-
-cp -dpR libuser-%{version} python2 || :
-cp -dpR python2 python3 || :
-rm -rf libuser-%{version} || :
-
-pushd python2
-cp -pr COPYING AUTHORS NEWS README TODO docs ../ || :
-popd
 
 %build
-pushd python2
-%configure --with-ldap --with-selinux --with-html-dir=%{_prefix}/share/gtk-doc/html \
-	PYTHON=%{_bindir}/python2
-make
-popd
-
-pushd python3
 %configure --with-ldap --with-selinux --with-html-dir=%{_prefix}/share/gtk-doc/html \
 	PYTHON=%{_bindir}/python3
 make
-popd
 
 %install
-make -C python3 install DESTDIR=$RPM_BUILD_ROOT INSTALL='install -p' || :
-make -C python2 install DESTDIR=$RPM_BUILD_ROOT INSTALL='install -p' || :
+make install DESTDIR=$RPM_BUILD_ROOT INSTALL='install -p' || :
 
 %find_lang %{name}
 
@@ -131,13 +99,8 @@ make -C python2 install DESTDIR=$RPM_BUILD_ROOT INSTALL='install -p' || :
 %exclude %{_prefix}/%{_lib}/%{name}/*.la
 %exclude %{_prefix}/%{_lib}/*.la
 
-%files -n python2-libuser
-%doc python2/python/modules.txt
-%{python2_sitearch}/*.so
-%exclude %{python2_sitearch}/*.la
-
 %files python3
-%doc python3/python/modules.txt
+%doc python/modules.txt
 %{python3_sitearch}/*.so
 %exclude %{python3_sitearch}/*.la
 
@@ -152,6 +115,9 @@ make -C python2 install DESTDIR=$RPM_BUILD_ROOT INSTALL='install -p' || :
 %{_mandir}/man5/*
 
 %changelog
+* Thu Oct 29 2020 wangchen <wangchen137@huawei.com> - 0.62-22
+- remove python2
+
 * Thu Jul 30 2020 zhangxingliang <zhangxingliang3@huawei.com> - 0.62-21
 - do not use deprecated flask.h and av_permissions.h
 
