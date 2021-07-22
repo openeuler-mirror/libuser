@@ -1,6 +1,6 @@
 Name:    libuser
 Version: 0.62
-Release: 22
+Release: 23
 Summary: A user and group account administration library
 License: LGPLv2+
 URL:     https://pagure.io/libuser
@@ -15,7 +15,7 @@ Patch4:    0012-editing_open-close-fd-after-we-ve-established-its-va.patch
 Patch5:    libuser-do-not-use-deprecated-flask.h-and-av_permissions.patch
 
 BuildRequires: cyrus-sasl-devel, nscd, linuxdoc-tools, pam-devel, popt-devel, gcc
-BuildRequires: libselinux-devel, openldap-devel, python3-devel, glib2-devel, gdb
+BuildRequires: libselinux-devel, openldap-devel, python3-devel, glib2-devel
 BuildRequires: fakeroot, openldap-clients, openldap-servers, openssl
 
 %description
@@ -115,6 +115,9 @@ make install DESTDIR=$RPM_BUILD_ROOT INSTALL='install -p' || :
 %{_mandir}/man5/*
 
 %changelog
+* Tue Jul 20 2021 fuanan <fuanan3@huawei.com> - 0.62-23
+- Remove redundant gdb from BuildRequires
+
 * Thu Oct 29 2020 wangchen <wangchen137@huawei.com> - 0.62-22
 - remove python2
 
