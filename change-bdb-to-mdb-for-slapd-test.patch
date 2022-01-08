@@ -1,0 +1,25 @@
+From c8f905ae72bbcc944f11050a59abb3f4739e5e45 Mon Sep 17 00:00:00 2001
+From: panxiaohe <panxiaohe@huawei.com>
+Date: Sat, 8 Jan 2022 17:19:03 +0800
+Subject: [PATCH] change bdb to mdb for slapd test
+
+---
+ tests/slapd.conf.in | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/tests/slapd.conf.in b/tests/slapd.conf.in
+index 06ef10d..8e49a36 100644
+--- a/tests/slapd.conf.in
++++ b/tests/slapd.conf.in
+@@ -10,7 +10,7 @@ pidfile @WORKDIR@/slapd.pid
+ TLSCertificateFile @WORKDIR@/key.pem
+ TLSCertificateKeyFile @WORKDIR@/key.pem
+ 
+-database bdb
++database mdb
+ suffix "dc=libuser"
+ rootdn "cn=Manager,dc=libuser"
+ rootpw {SSHA}ABgelmLFZQ/OJzVEp3OM5MzWQ9rt3b4F
+-- 
+1.8.3.1
+

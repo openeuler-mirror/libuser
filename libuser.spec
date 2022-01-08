@@ -1,13 +1,14 @@
 Name:    libuser
 Version: 0.63
-Release: 1
+Release: 2
 Summary: A user and group account administration library
 License: LGPLv2+
 URL:     https://pagure.io/libuser
 Source:  http://releases.pagure.org/libuser/libuser-%{version}.tar.xz
 
-Patch0: %{url}/pull-request/49.patch#/libuser-0.63-PR49_add_yescrypt.patch
+Patch0: libuser-0.63-PR49_add_yescrypt.patch
 Patch1: libuser-0.63-downstream_test_xcrypt.patch
+Patch2: change-bdb-to-mdb-for-slapd-test.patch
 
 BuildRequires: cyrus-sasl-devel, nscd, linuxdoc-tools, pam-devel, popt-devel, gcc
 BuildRequires: libselinux-devel, openldap-devel, python3-devel, glib2-devel
@@ -46,9 +47,7 @@ Requires:       man, info
 Man pages and other related documents for %{name}
 
 %prep
-%setup -qn libuser-%{version}
-%patch0 -p1
-%patch1 -p1
+%autosetup -n libuser-%{version} -p1
 
 %build
 ./autogen.sh
@@ -62,12 +61,12 @@ make install DESTDIR=$RPM_BUILD_ROOT INSTALL='install -p' || :
 %find_lang %{name}
 
 %check
-LC_ALL=C.UTF-8 make -C python3 check \
-	|| { cat python3/test-suite.log; false; }
+%make_build check || { cat test-suite.log; false; }
+
 LD_LIBRARY_PATH=$RPM_BUILD_ROOT/%{_prefix}/%{_lib}:${LD_LIBRARY_PATH}
 export LD_LIBRARY_PATH
 cd $RPM_BUILD_ROOT/%{python3_sitearch}
-LC_ALL=C.UTF-8 python3 -c "import libuser"
+python3 -c "import libuser"
 
 %post
 /sbin/ldconfig
@@ -103,6 +102,9 @@ LC_ALL=C.UTF-8 python3 -c "import libuser"
 %{_mandir}/man5/*
 
 %changelog
+* Sat Jan 8 2022 panxiaohe <panxiaohe@huawei.com> - 0.63-2
+- change bdb to mdb for ldap_test and defult_pw_test
+
 * Sat Nov 27 2021 fuanan <fuanan3@huawei.com> - 0.63-1
 - update version to 0.63
 
