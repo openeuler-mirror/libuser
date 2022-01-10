@@ -8,7 +8,7 @@ Source:  http://releases.pagure.org/libuser/libuser-%{version}.tar.xz
 
 Patch0: libuser-0.63-PR49_add_yescrypt.patch
 Patch1: libuser-0.63-downstream_test_xcrypt.patch
-Patch2: change-bdb-to-mdb-for-slapd-test.patch
+Patch2: fix-ldap-test-because-openldap-was-upgraded.patch
 
 BuildRequires: cyrus-sasl-devel, nscd, linuxdoc-tools, pam-devel, popt-devel, gcc
 BuildRequires: libselinux-devel, openldap-devel, python3-devel, glib2-devel
@@ -102,8 +102,8 @@ python3 -c "import libuser"
 %{_mandir}/man5/*
 
 %changelog
-* Sat Jan 8 2022 panxiaohe <panxiaohe@huawei.com> - 0.63-2
-- change bdb to mdb for ldap_test and defult_pw_test
+* Mon Jan 10 2022 panxiaohe <panxiaohe@huawei.com> - 0.63-2
+- fix ldap test because openldap was upgraded to 2.6.0
 
 * Sat Nov 27 2021 fuanan <fuanan3@huawei.com> - 0.63-1
 - update version to 0.63

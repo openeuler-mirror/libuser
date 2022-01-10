@@ -1,0 +1,67 @@
+From 85bcf0efc3d3e6453f6e50da877dc7eb1a4d1ae1 Mon Sep 17 00:00:00 2001
+From: panxiaohe <panxiaohe@huawei.com>
+Date: Mon, 10 Jan 2022 13:17:22 +0800
+Subject: [PATCH] fix ldap test because openldap was upgraded to 2.6.0
+
+The new version of openldap has removed deprecated -h and -p options
+to client tools. And it has deleted back-bdb, so this patch uses mdb.
+---
+ tests/default_pw_test | 6 ++++--
+ tests/ldap_test       | 3 ++-
+ tests/slapd.conf.in   | 2 +-
+ 3 files changed, 7 insertions(+), 4 deletions(-)
+
+diff --git a/tests/default_pw_test b/tests/default_pw_test
+index 733c85c..932dcb2 100755
+--- a/tests/default_pw_test
++++ b/tests/default_pw_test
+@@ -69,7 +69,8 @@ get_file_password() # file under $workdir/files, entry name
+ get_ldap_password() # entry filter
+ {
+     echo "Checking $1 ..." >&2
+-    ldapsearch -LLL -h 127.0.0.1 -p "$ldap_port" -x -b 'dc=libuser' "$1" \
++    URI="ldap://127.0.0.1:$ldap_port/"
++    ldapsearch -LLL -H "$URI" -x -b 'dc=libuser' "$1" \
+ 	userPassword | sed -n 's/userPassword:: //p'
+ }
+ 
+@@ -103,7 +104,8 @@ for modules in \
+ 	    tests/wait_for_slapd_start "$workdir"/slapd.pid "$ldap_port"
+ 	    slapd_pid=$(cat "$workdir"/slapd.pid)
+ 	    trap 'status=$?; kill $slapd_pid; rm -rf "$workdir"; exit $status' 0
+-	    ldapadd -h 127.0.0.1 -p "$ldap_port" -f "$srcdir/ldap_skel.ldif" -x \
++	    URI="ldap://127.0.0.1:$ldap_port/"
++	    ldapadd -H "$URI" -f "$srcdir/ldap_skel.ldif" -x \
+ 		-D cn=Manager,dc=libuser -w password
+ 	    ;;
+     esac
+diff --git a/tests/ldap_test b/tests/ldap_test
+index 54609b1..de9308c 100755
+--- a/tests/ldap_test
++++ b/tests/ldap_test
+@@ -56,7 +56,8 @@ slapd_pid=$(cat "$workdir"/slapd.pid)
+ trap 'status=$?; kill $slapd_pid
+ 	tests/wait_for_slapd_exit "$workdir"/slapd.pid "$ldap_port"
+ 	rm -rf "$workdir"; exit $status' 0
+-ldapadd -h 127.0.0.1 -p "$ldap_port" -f "$srcdir/ldap_skel.ldif" -x \
++URI="ldap://127.0.0.1:$ldap_port/"
++ldapadd -H "$URI" -f "$srcdir/ldap_skel.ldif" -x \
+     -D cn=Manager,dc=libuser -w password
+ 
+ 
+diff --git a/tests/slapd.conf.in b/tests/slapd.conf.in
+index 06ef10d..8e49a36 100644
+--- a/tests/slapd.conf.in
++++ b/tests/slapd.conf.in
+@@ -10,7 +10,7 @@ pidfile @WORKDIR@/slapd.pid
+ TLSCertificateFile @WORKDIR@/key.pem
+ TLSCertificateKeyFile @WORKDIR@/key.pem
+ 
+-database bdb
++database mdb
+ suffix "dc=libuser"
+ rootdn "cn=Manager,dc=libuser"
+ rootpw {SSHA}ABgelmLFZQ/OJzVEp3OM5MzWQ9rt3b4F
+-- 
+1.8.3.1
+
