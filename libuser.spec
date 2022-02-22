@@ -1,6 +1,6 @@
 Name:    libuser
 Version: 0.63
-Release: 3
+Release: 4
 Summary: A user and group account administration library
 License: LGPLv2+
 URL:     https://pagure.io/libuser
@@ -12,7 +12,7 @@ Patch2: fix-ldap-test-because-openldap-was-upgraded.patch
 
 Patch9000: add-sm3-crypt-support.patch
 
-BuildRequires: cyrus-sasl-devel, nscd, linuxdoc-tools, pam-devel, popt-devel, gcc
+BuildRequires: cyrus-sasl-devel, linuxdoc-tools, pam-devel, popt-devel, gcc
 BuildRequires: libselinux-devel, openldap-devel, python3-devel, glib2-devel
 BuildRequires: openldap-clients, openldap-servers, openssl
 BuildRequires: bison, make, libtool, gettext-devel, gtk-doc, audit-libs-devel
@@ -104,6 +104,9 @@ python3 -c "import libuser"
 %{_mandir}/man5/*
 
 %changelog
+* Tue Feb 22 2022 jiangheng <jiangheng12@huawei.com> - 0.63-4
+- remove nscd dependency
+
 * Tue Jan 11 2022 luhuaxin <luhuaxin1@huawei.com> - 0.63-3
 - add sm3 crypt support
 
