@@ -1,6 +1,6 @@
 Name:    libuser
 Version: 0.62
-Release: 21
+Release: 22
 Summary: A user and group account administration library
 License: LGPLv2+
 URL:     https://pagure.io/libuser
@@ -13,10 +13,13 @@ Patch2:    0010-files.c-Init-char-name-to-NULL.patch
 Patch3:    0011-merge_ent_array_duplicates-Only-use-values-if-valid.patch
 Patch4:    0012-editing_open-close-fd-after-we-ve-established-its-va.patch
 Patch5:    libuser-do-not-use-deprecated-flask.h-and-av_permissions.patch
+Patch6:    add-sm3-crypt-support.patch
 
 BuildRequires: cyrus-sasl-devel, nscd, linuxdoc-tools, pam-devel, popt-devel, gcc
 BuildRequires: libselinux-devel, openldap-devel, python3-devel, glib2-devel, gdb
 BuildRequires: python2-devel, fakeroot, openldap-clients, openldap-servers, openssl
+
+Requires: pam-sm3 libxcrypt-sm3
 
 %description
 The libuser library implements a standardized interface for manipulating
@@ -71,6 +74,7 @@ pushd libuser-%{version}
 %patch3 -p1
 %patch4 -p1
 %patch5 -p1
+%patch6 -p1
 popd
 
 cp -dpR libuser-%{version} python2 || :
@@ -152,6 +156,9 @@ make -C python2 install DESTDIR=$RPM_BUILD_ROOT INSTALL='install -p' || :
 %{_mandir}/man5/*
 
 %changelog
+* Thu Sep 01 2022 fuanan <fuanan3@h-partners.com> - 0.62-22
+- add sm3 crypt support
+
 * Mon Sep 21 2020 Liquor <lirui130@huawei.com> - 0.62-21
 - do not use deprecated flask.h and av_permissions.h
 

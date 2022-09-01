@@ -1,0 +1,630 @@
+From 3e3f03313cc2a08efe7a7c64bf1d5cdd7333569d Mon Sep 17 00:00:00 2001
+From: lujie42 <lujie42@huawei.com>
+Date: Fri, 29 Oct 2021 15:56:12 +0800
+Subject: [PATCH] add sm3 crypt support
+
+Signed-off-by: lujie42 <lujie42@huawei.com>
+---
+ Makefile.in             |   8 +
+ docs/libuser.conf.5.in  |   4 +-
+ lib/util.c              |   4 +-
+ tests/files_sm3.conf.in |  25 +++
+ tests/sm3_test          |  43 +++++
+ tests/sm3_test.py       | 446 ++++++++++++++++++++++++++++++++++++++++++++++++
+ 6 files changed, 527 insertions(+), 3 deletions(-)
+ create mode 100644 tests/files_sm3.conf.in
+ create mode 100755 tests/sm3_test
+ create mode 100755 tests/sm3_test.py
+
+diff --git a/Makefile.in b/Makefile.in
+index 6633313..0952d0f 100644
+--- a/Makefile.in
++++ b/Makefile.in
+@@ -928,6 +928,7 @@ EXTRA_DIST = \
+ 	tests/config_login.defs tests/config_login2.defs \
+ 	tests/config_override.conf.in tests/config_test.py \
+ 	tests/config_test.sh \
++	tests/files_sm3.conf.in tests/sm3_test tests/sm3_test.py \
+ 	tests/default_pw.conf.in tests/default_pw_test tests/default_pw_test.py \
+ 	tests/files.conf.in tests/files_test tests/files_test.py \
+ 	tests/fs.conf.in tests/fs_test tests/fs_test.py \
+@@ -2390,6 +2391,13 @@ tests/fs_test.log: tests/fs_test
+ 	--log-file $$b.log --trs-file $$b.trs \
+ 	$(am__common_driver_flags) $(AM_LOG_DRIVER_FLAGS) $(LOG_DRIVER_FLAGS) -- $(LOG_COMPILE) \
+ 	"$$tst" $(AM_TESTS_FD_REDIRECT)
++tests/sm3_test.log: tests/sm3_test
++	@p='tests/sm3_test'; \
++	b='tests/sm3_test'; \
++	$(am__check_pre) $(LOG_DRIVER) --test-name "$$f" \
++	--log-file $$b.log --trs-file $$b.trs \
++	$(am__common_driver_flags) $(AM_LOG_DRIVER_FLAGS) $(LOG_DRIVER_FLAGS) -- $(LOG_COMPILE) \
++	"$$tst" $(AM_TESTS_FD_REDIRECT)
+ tests/files_test.log: tests/files_test
+ 	@p='tests/files_test'; \
+ 	b='tests/files_test'; \
+diff --git a/docs/libuser.conf.5.in b/docs/libuser.conf.5.in
+index 2af0828..cf74b4f 100644
+--- a/docs/libuser.conf.5.in
++++ b/docs/libuser.conf.5.in
+@@ -68,7 +68,7 @@ The algorithm to use for password encryption when creating new passwords.
+ The current algorithm may be retained
+ when changing a password of an existing user, depending on the application.
+ 
+-Possible values are \fBdes\fR, \fBmd5\fR, \fBblowfish\fR,
++Possible values are \fBdes\fR, \fBmd5\fR, \fBblowfish\fR, \fBsm3\fR,
+ .B sha256
+ and \fBsha512\fR, all case-insensitive.
+ Unrecognized values are treated as \fBdes\fR.
+@@ -80,7 +80,7 @@ These variables specify an inclusive range of hash rounds used when
+ .B crypt_style
+ is
+ .B sha256
+-or \fBsha512\fR.
++or \fBsha512\fR or \fBsm3\fR.
+ A number of hash rounds is chosen from this interval randomly.
+ A larger number of rounds makes password checking, and brute-force attempts
+ to guess the password by reversing the hash, more CPU-intensive.
+diff --git a/lib/util.c b/lib/util.c
+index 1b03f7d..904c586 100644
+--- a/lib/util.c
++++ b/lib/util.c
+@@ -117,7 +117,7 @@ fill_urandom(char *output, size_t length)
+ }
+ 
+ static const struct {
+-	const char initial[5];
++	const char initial[6];
+ 	char separator[2];
+ 	size_t salt_length;
+ 	gboolean sha_rounds;
+@@ -127,6 +127,7 @@ static const struct {
+ 	{"$2a$", "$", 8, FALSE },
+ 	{"$5$", "$", 16, TRUE },
+ 	{"$6$", "$", 16, TRUE },
++	{"$sm3$", "$", 16, TRUE },
+ 	{ "", "", 2 },
+ };
+ 
+@@ -234,6 +235,7 @@ lu_util_default_salt_specifier(struct lu_context *context)
+ 		{ "blowfish", "$2a$", FALSE },
+ 		{ "sha256", "$5$", TRUE },
+ 		{ "sha512", "$6$", TRUE },
++		{ "sm3", "$sm3$", TRUE },
+ 	};
+ 
+ 	const char *salt_type;
+diff --git a/tests/files_sm3.conf.in b/tests/files_sm3.conf.in
+new file mode 100644
+index 0000000..3831d0f
+--- /dev/null
++++ b/tests/files_sm3.conf.in
+@@ -0,0 +1,25 @@
++[defaults]
++# non-portable
++moduledir = @TOP_BUILDDIR@/modules/.libs
++skeleton = /etc/skel
++mailspooldir = /var/mail
++modules = files shadow
++create_modules = files shadow
++crypt_style = sm3
++
++[userdefaults]
++LU_USERNAME = %n
++LU_UIDNUMBER = 500
++LU_GIDNUMBER = %u
++
++[groupdefaults]
++LU_GROUPNAME = %n
++LU_GIDNUMBER = 500
++
++[files]
++directory = @WORKDIR@/sm3
++nonroot = yes
++
++[shadow]
++directory = @WORKDIR@/sm3
++nonroot = yes
+diff --git a/tests/sm3_test b/tests/sm3_test
+new file mode 100755
+index 0000000..bdb2034
+--- /dev/null
++++ b/tests/sm3_test
+@@ -0,0 +1,43 @@
++#!/bin/bash
++# Copyright (c) Huawei Technologies Co., Ltd. 2021-2021. All rights reserved.
++# Description: Automated files/shadow regression tester for sm3 crypt
++# Create: 2021-07-26
++
++srcdir=$srcdir/tests
++
++workdir=$(pwd)/test_sm3
++
++trap 'status=$?; rm -rf "$workdir"; exit $status' 0
++trap '(exit 1); exit 1' 1 2 13 15
++
++rm -rf "$workdir"
++mkdir "$workdir"
++
++# Set up an the environment
++mkdir "$workdir"/sm3
++
++cat > "$workdir"/sm3/passwd <<\EOF
++empty_user::42:43:::
++EOF
++cat > "$workdir"/sm3/shadow <<\EOF
++empty_user::::::::
++EOF
++cat > "$workdir"/sm3/group <<\EOF
++empty_group::44:
++EOF
++cat > "$workdir"/sm3/gshadow <<\EOF
++empty_group:::
++EOF
++
++# Set up the client
++LIBUSER_CONF=$workdir/libuser.conf
++export LIBUSER_CONF
++sed "s|@WORKDIR@|$workdir|g; s|@TOP_BUILDDIR@|$(pwd)|g" \
++    < "$srcdir"/files_sm3.conf.in > "$LIBUSER_CONF"
++# Ugly non-portable hacks
++LD_LIBRARY_PATH=$(pwd)/lib/.libs
++export LD_LIBRARY_PATH
++PYTHONPATH=$(pwd)/python/.libs
++export PYTHONPATH
++
++workdir="$workdir" $VALGRIND $PYTHON "$srcdir"/sm3_test.py
+diff --git a/tests/sm3_test.py b/tests/sm3_test.py
+new file mode 100755
+index 0000000..e680dd7
+--- /dev/null
++++ b/tests/sm3_test.py
+@@ -0,0 +1,446 @@
++#!/usr/bin/python
++# Copyright (c) Huawei Technologies Co., Ltd. 2021-2021. All rights reserved.
++# Description: sm3 crypt testcase
++# Create: 2021-07-26
++
++import crypt
++import libuser
++import os
++import os.path
++import sys
++import unittest
++
++#sm3
++crypt_flag="$sm3$"
++crypt_flag_len=5
++crypt_t="sm3"
++
++
++class Tests(unittest.TestCase):
++    def setUp(self):
++        self.a = libuser.admin()
++
++    def testSm3UserLock1(self):
++        e = self.a.initUser('user100_1')
++        self.a.addUser(e, False, False)
++        del e
++        e = self.a.lookupUserByName('user100_1')
++        self.a.setpassUser(e, '00as1wm0AZG56', True)
++        self.assertEqual(e[libuser.USERPASSWORD], ['x'])
++        self.assertEqual(e[libuser.SHADOWPASSWORD], ['00as1wm0AZG56'])
++        self.a.lockUser(e)
++        self.assertEqual(e[libuser.USERPASSWORD], ['x'])
++        self.assertEqual(e[libuser.SHADOWPASSWORD], ['!!00as1wm0AZG56'])
++
++    def testSm3UserLock2(self):
++        e = self.a.initUser('user100_2')
++        self.a.addUser(e, False, False)
++        del e
++        e = self.a.lookupUserByName('user100_2')
++        self.a.setpassUser(e, 'HABAG_12=%', False)
++        self.assertEqual(e[libuser.USERPASSWORD], ['x'])
++        self.assertEqual(e[libuser.SHADOWPASSWORD][0][:crypt_flag_len], crypt_flag)
++        self.a.lockUser(e)
++        del e
++        e = self.a.lookupUserByName('user100_2')
++        self.assertEqual(e[libuser.USERPASSWORD], ['x'])
++        self.assertEqual(e[libuser.SHADOWPASSWORD][0][:2 + crypt_flag_len], '!!' + crypt_flag)
++
++    def testSm3UserUnlock1(self):
++        e = self.a.initUser('user101_1')
++        self.a.addUser(e, False, False)
++        del e
++        e = self.a.lookupUserByName('user101_1')
++        self.a.setpassUser(e, '!!00as1wm0AZG56', True)
++        self.assertEqual(e[libuser.USERPASSWORD], ['x'])
++        self.assertEqual(e[libuser.SHADOWPASSWORD], ['!!00as1wm0AZG56'])
++        self.a.unlockUser(e)
++        self.assertEqual(e[libuser.USERPASSWORD], ['x'])
++        self.assertEqual(e[libuser.SHADOWPASSWORD], ['00as1wm0AZG56'])
++
++    def testSm3UserUnlock2(self):
++        e = self.a.initUser('user101_2')
++        self.a.addUser(e, False, False)
++        del e
++        e = self.a.lookupUserByName('user101_2')
++        self.a.setpassUser(e, '00as1wm0AZG56', True)
++        self.assertEqual(e[libuser.USERPASSWORD], ['x'])
++        self.assertEqual(e[libuser.SHADOWPASSWORD], ['00as1wm0AZG56'])
++        self.a.unlockUser(e)
++        self.assertEqual(e[libuser.USERPASSWORD], ['x'])
++        self.assertEqual(e[libuser.SHADOWPASSWORD], ['00as1wm0AZG56'])
++
++    def testSm3UserUnlock3(self):
++        e = self.a.initUser('user101_3')
++        self.a.addUser(e, False, False)
++        del e
++        e = self.a.lookupUserByName('user101_3')
++        self.a.setpassUser(e, 'HABAG_12=%', False)
++        self.assertEqual(e[libuser.USERPASSWORD], ['x'])
++        self.assertEqual(e[libuser.SHADOWPASSWORD][0][:crypt_flag_len], crypt_flag)
++        self.a.lockUser(e)
++        del e
++        e = self.a.lookupUserByName('user101_3')
++        self.assertEqual(e[libuser.USERPASSWORD], ['x'])
++        self.assertEqual(e[libuser.SHADOWPASSWORD][0][:2 + crypt_flag_len], '!!' + crypt_flag)
++        self.a.unlockUser(e)
++        del e
++        e = self.a.lookupUserByName('user101_3')
++        self.assertEqual(e[libuser.USERPASSWORD], ['x'])
++        self.assertEqual(e[libuser.SHADOWPASSWORD][0][:crypt_flag_len], crypt_flag)
++
++    def testSm3UserUnlockNonempty1(self):
++        e = self.a.initUser('user102_1')
++        self.a.addUser(e, False, False)
++        del e
++        e = self.a.lookupUserByName('user102_1')
++        self.a.setpassUser(e, '!!00as1wm0AZG56', True)
++        self.assertEqual(e[libuser.USERPASSWORD], ['x'])
++        self.assertEqual(e[libuser.SHADOWPASSWORD], ['!!00as1wm0AZG56'])
++        self.a.unlockUser(e, True)
++        self.assertEqual(e[libuser.USERPASSWORD], ['x'])
++        self.assertEqual(e[libuser.SHADOWPASSWORD], ['00as1wm0AZG56'])
++
++    def testSm3UserUnlockNonempty2(self):
++        e = self.a.initUser('user102_2')
++        self.a.addUser(e, False, False)
++        del e
++        e = self.a.lookupUserByName('user102_2')
++        self.a.setpassUser(e, 'GJMK12#@', False)
++
++        del e
++        e = self.a.lookupUserByName('user102_2')
++        self.assertEqual(e[libuser.USERPASSWORD], ['x'])
++        self.assertEqual(e[libuser.SHADOWPASSWORD][0][:crypt_flag_len], crypt_flag)
++        self.a.lockUser(e)
++        del e
++        e = self.a.lookupUserByName('user102_2')
++        self.assertEqual(e[libuser.USERPASSWORD], ['x'])
++        self.assertEqual(e[libuser.SHADOWPASSWORD][0][:2 + crypt_flag_len], '!!' + crypt_flag)
++        self.a.unlockUser(e, True)
++        del e
++        e = self.a.lookupUserByName('user102_2')
++        self.assertEqual(e[libuser.USERPASSWORD], ['x'])
++        self.assertEqual(e[libuser.SHADOWPASSWORD][0][:crypt_flag_len], crypt_flag)
++
++    def testSm3UserUnlockNonempty3(self):
++        e = self.a.initUser('user102_3')
++        self.a.addUser(e, False, False)
++        del e
++        e = self.a.lookupUserByName('user102_3')
++        self.a.setpassUser(e, '!!', True)
++        self.assertEqual(e[libuser.USERPASSWORD], ['x'])
++        self.assertEqual(e[libuser.SHADOWPASSWORD], ['!!'])
++        self.assertRaises(RuntimeError, self.a.unlockUser, e, True)
++        del e
++        e = self.a.lookupUserByName('user102_3')
++        self.assertEqual(e[libuser.USERPASSWORD], ['x'])
++        self.assertEqual(e[libuser.SHADOWPASSWORD], ['!!'])
++
++
++    def testSm3UserSetpass1(self):
++        e = self.a.initUser('user103_1')
++        e[libuser.SHADOWPASSWORD] = '02oawyZdjhhpg'
++        e[libuser.SHADOWLASTCHANGE] = 100
++        self.a.addUser(e, False, False)
++
++        del e
++        e = self.a.lookupUserByName('user103_1')
++        self.assertEqual(e[libuser.USERPASSWORD], ['x'])
++        self.assertEqual(e[libuser.SHADOWPASSWORD], ['02oawyZdjhhpg'])
++        self.assertEqual(e[libuser.SHADOWLASTCHANGE], [100])
++        self.a.setpassUser(e, 'password', False)
++        del e
++        e = self.a.lookupUserByName('user103_1')
++        self.assertEqual(e[libuser.USERPASSWORD], ['x'])
++        self.assertEqual(e[libuser.SHADOWPASSWORD][0][:crypt_flag_len], crypt_flag)
++        crypted = crypt.crypt('password', e[libuser.SHADOWPASSWORD][0])
++        self.assertEqual(e[libuser.SHADOWPASSWORD], [crypted])
++        self.assertGreater(e[libuser.SHADOWLASTCHANGE][0], 10000)
++
++
++    def testSm3UserSetpass2(self):
++        # Forcing the non-shadow password to 'x'
++        e = self.a.initUser('user103_2')
++        e[libuser.USERPASSWORD] = '*'
++        e[libuser.SHADOWPASSWORD] = '08lnuxCM.c36E'
++        self.a.addUser(e, False, False)
++
++        del e
++        # shadow module's addUser forces USERPASSWORD to 'x'
++        e = self.a.lookupUserByName('user103_2')
++        self.assertEqual(e[libuser.USERPASSWORD], ['x'])
++        self.assertEqual(e[libuser.SHADOWPASSWORD], ['08lnuxCM.c36E'])
++        e[libuser.USERPASSWORD] = '*'
++        self.a.modifyUser(e, False)
++
++        del e
++        e = self.a.lookupUserByName('user103_2')
++        self.assertEqual(e[libuser.USERPASSWORD], ['*'])
++        self.assertEqual(e[libuser.SHADOWPASSWORD], ['08lnuxCM.c36E'])
++        self.a.setpassUser(e, 'password', False)
++        self.assertEqual(e[libuser.USERPASSWORD], ['x'])
++        self.assertEqual(e[libuser.SHADOWPASSWORD][0][:crypt_flag_len], crypt_flag)
++        crypted = crypt.crypt('password', e[libuser.SHADOWPASSWORD][0])
++        self.assertEqual(e[libuser.SHADOWPASSWORD], [crypted])
++
++
++    def testSm3UserSetpass3(self):
++        # ':' in field value
++        e = self.a.initUser('user103_3')
++        self.a.addUser(e, False, False)
++        del e
++        e = self.a.lookupUserByName('user103_3')
++        self.assertNotIn(':', e[libuser.SHADOWPASSWORD][0])
++        self.assertRaises(SystemError, self.a.setpassUser, e, 'a:b', True)
++        self.a.setpassUser(e, 'a:b', False)
++        del e
++        e = self.a.lookupUserByName('user103_3')
++        self.assertEqual(e[libuser.SHADOWPASSWORD][0][:crypt_flag_len], crypt_flag)
++        self.assertNotIn(':', e[libuser.SHADOWPASSWORD][0])
++        crypted = crypt.crypt('a:b', e[libuser.SHADOWPASSWORD][0])
++        self.assertEqual(e[libuser.SHADOWPASSWORD], [crypted])
++
++
++    def testSm3UserRemovepass1(self):
++        e = self.a.initUser('user104_1')
++        e[libuser.SHADOWPASSWORD] = '03dgZm5nZvqOc'
++        e[libuser.SHADOWLASTCHANGE] = 100
++        self.a.addUser(e, False, False)
++        del e
++        e = self.a.lookupUserByName('user104_1')
++        self.assertEqual(e[libuser.USERPASSWORD], ['x'])
++        self.assertEqual(e[libuser.SHADOWPASSWORD], ['03dgZm5nZvqOc'])
++        self.assertEqual(e[libuser.SHADOWLASTCHANGE], [100])
++        self.a.removepassUser(e)
++        del e
++        e = self.a.lookupUserByName('user104_1')
++        self.assertEqual(e[libuser.USERPASSWORD], ['x'])
++        self.assertEqual(e[libuser.SHADOWPASSWORD], [''])
++        self.assertGreater(e[libuser.SHADOWLASTCHANGE][0], 10000)
++
++    def testSm3UserRemovepass2(self):
++        e = self.a.initUser('user104_2')
++        self.a.addUser(e, False, False)
++        del e
++        e = self.a.lookupUserByName('user104_2')
++        self.a.setpassUser(e, 'ABc123', False)
++        del e
++        e = self.a.lookupUserByName('user104_2')
++        self.assertEqual(e[libuser.SHADOWPASSWORD][0][:crypt_flag_len], crypt_flag)
++        self.a.removepassUser(e)
++        del e
++        e = self.a.lookupUserByName('user104_2')
++        self.assertEqual(e[libuser.USERPASSWORD], ['x'])
++        self.assertEqual(e[libuser.SHADOWPASSWORD], [''])
++
++
++    def testSm3GroupLock1(self):
++        e = self.a.initGroup('group100_1')
++        self.a.addGroup(e)
++        del e
++        e = self.a.lookupGroupByName('group100_1')
++        self.a.setpassGroup(e, '04cmES7HM6wtg', True)
++        self.assertEqual(e[libuser.GROUPPASSWORD], ['x'])
++        self.assertEqual(e[libuser.SHADOWPASSWORD], ['04cmES7HM6wtg'])
++        self.a.lockGroup(e)
++        self.assertEqual(e[libuser.GROUPPASSWORD], ['x'])
++        self.assertEqual(e[libuser.SHADOWPASSWORD], ['!!04cmES7HM6wtg'])
++
++    def testSm3GroupLock2(self):
++        e = self.a.initGroup('group100_2')
++        self.a.addGroup(e)
++        del e
++        e = self.a.lookupGroupByName('group100_2')
++        self.a.setpassGroup(e, '!!04cmES7HM6wtg', True)
++        self.assertEqual(e[libuser.GROUPPASSWORD], ['x'])
++        self.assertEqual(e[libuser.SHADOWPASSWORD], ['!!04cmES7HM6wtg'])
++        self.a.lockGroup(e)
++        self.assertEqual(e[libuser.GROUPPASSWORD], ['x'])
++        self.assertEqual(e[libuser.SHADOWPASSWORD], ['!!04cmES7HM6wtg'])
++
++    def testSm3GroupLock3(self):
++        e = self.a.initGroup('group100_3')
++        self.a.addGroup(e)
++        del e
++        e = self.a.lookupGroupByName('group100_3')
++        self.a.setpassGroup(e, 'ABc123MTK', False)
++        self.assertEqual(e[libuser.GROUPPASSWORD], ['x'])
++        self.assertEqual(e[libuser.SHADOWPASSWORD][0][:crypt_flag_len], crypt_flag)
++        self.a.lockGroup(e)
++        del e
++        e = self.a.lookupGroupByName('group100_3')
++        self.assertEqual(e[libuser.GROUPPASSWORD], ['x'])
++        self.assertEqual(e[libuser.SHADOWPASSWORD][0][:2 + crypt_flag_len], '!!' + crypt_flag)
++
++    def testSm3GroupUnlock1(self):
++        e = self.a.initGroup('group101_1')
++        self.a.addGroup(e)
++        del e
++        e = self.a.lookupGroupByName('group101_1')
++        self.a.setpassGroup(e, '!!04cmES7HM6wtg', True)
++        self.assertEqual(e[libuser.GROUPPASSWORD], ['x'])
++        self.assertEqual(e[libuser.SHADOWPASSWORD], ['!!04cmES7HM6wtg'])
++        self.a.unlockGroup(e)
++        self.assertEqual(e[libuser.GROUPPASSWORD], ['x'])
++        self.assertEqual(e[libuser.SHADOWPASSWORD], ['04cmES7HM6wtg'])
++
++    def testSm3GroupUnlock2(self):
++        e = self.a.initGroup('group101_2')
++        self.a.addGroup(e)
++        del e
++        e = self.a.lookupGroupByName('group101_2')
++        self.a.setpassGroup(e, '04cmES7HM6wtg', True)
++        self.assertEqual(e[libuser.GROUPPASSWORD], ['x'])
++        self.assertEqual(e[libuser.SHADOWPASSWORD], ['04cmES7HM6wtg'])
++        self.a.unlockGroup(e)
++        self.assertEqual(e[libuser.GROUPPASSWORD], ['x'])
++        self.assertEqual(e[libuser.SHADOWPASSWORD], ['04cmES7HM6wtg'])
++
++    def testSm3GroupUnlock3(self):
++        e = self.a.initGroup('group101_3')
++        self.a.addGroup(e)
++        del e
++        e = self.a.lookupGroupByName('group101_3')
++        self.a.setpassGroup(e, 'axbc12#=', False)
++        self.assertEqual(e[libuser.GROUPPASSWORD], ['x'])
++        self.assertEqual(e[libuser.SHADOWPASSWORD][0][:crypt_flag_len], crypt_flag)
++        self.a.lockGroup(e)
++        self.a.unlockGroup(e)
++        del e
++        e = self.a.lookupGroupByName('group101_3')
++        self.assertEqual(e[libuser.GROUPPASSWORD], ['x'])
++        self.assertEqual(e[libuser.SHADOWPASSWORD][0][:crypt_flag_len], crypt_flag)
++
++    def testSm3GroupUnlockNonempty1(self):
++        e = self.a.initGroup('group102_1')
++        self.a.addGroup(e)
++        del e
++        e = self.a.lookupGroupByName('group102_1')
++        self.a.setpassGroup(e, '!!04cmES7HM6wtg', True)
++        self.assertEqual(e[libuser.GROUPPASSWORD], ['x'])
++        self.assertEqual(e[libuser.SHADOWPASSWORD], ['!!04cmES7HM6wtg'])
++        self.a.unlockGroup(e, True)
++        self.assertEqual(e[libuser.GROUPPASSWORD], ['x'])
++        self.assertEqual(e[libuser.SHADOWPASSWORD], ['04cmES7HM6wtg'])
++
++    def testSm3GroupUnlockNonempty2(self):
++        e = self.a.initGroup('group102_2')
++        self.a.addGroup(e)
++        del e
++        e = self.a.lookupGroupByName('group102_2')
++        self.a.setpassGroup(e, '04cmES7HM6wtg', True)
++        self.assertEqual(e[libuser.GROUPPASSWORD], ['x'])
++        self.assertEqual(e[libuser.SHADOWPASSWORD], ['04cmES7HM6wtg'])
++        self.a.unlockGroup(e)
++        self.assertEqual(e[libuser.GROUPPASSWORD], ['x'])
++        self.assertEqual(e[libuser.SHADOWPASSWORD], ['04cmES7HM6wtg'])
++
++    def testSm3GroupUnlockNonempty3(self):
++        e = self.a.initGroup('group102_3')
++        self.a.addGroup(e)
++        del e
++        e = self.a.lookupGroupByName('group102_3')
++        self.a.setpassGroup(e, 'a9ld3dabd', False)
++        self.assertEqual(e[libuser.GROUPPASSWORD], ['x'])
++        self.assertEqual(e[libuser.SHADOWPASSWORD][0][:crypt_flag_len], crypt_flag)
++        del e
++        e = self.a.lookupGroupByName('group102_3')
++        self.a.lockGroup(e)
++        self.a.unlockGroup(e)
++        self.assertEqual(e[libuser.GROUPPASSWORD], ['x'])
++        self.assertEqual(e[libuser.SHADOWPASSWORD][0][:crypt_flag_len], crypt_flag)
++
++    def testSm3GroupUnlockNonempty4(self):
++        e = self.a.initGroup('group102_4')
++        self.a.addGroup(e)
++        del e
++        e = self.a.lookupGroupByName('group102_4')
++        self.a.setpassGroup(e, '!!', True)
++        self.assertEqual(e[libuser.GROUPPASSWORD], ['x'])
++        self.assertEqual(e[libuser.SHADOWPASSWORD], ['!!'])
++        self.assertRaises(RuntimeError, self.a.unlockGroup, e, True)
++        del e
++        e = self.a.lookupGroupByName('group102_4')
++        self.assertEqual(e[libuser.GROUPPASSWORD], ['x'])
++        self.assertEqual(e[libuser.SHADOWPASSWORD], ['!!'])
++
++    def testSm3GroupSetpass1(self):
++        e = self.a.initGroup('group103_1')
++        e[libuser.SHADOWPASSWORD] = '06aZrb3pzuu/6'
++        self.a.addGroup(e)
++        del e
++        e = self.a.lookupGroupByName('group103_1')
++        self.assertEqual(e[libuser.GROUPPASSWORD], ['x'])
++        self.assertEqual(e[libuser.SHADOWPASSWORD], ['06aZrb3pzuu/6'])
++        self.a.setpassGroup(e, 'password', False)
++        self.assertEqual(e[libuser.GROUPPASSWORD], ['x'])
++        self.assertEqual(e[libuser.SHADOWPASSWORD][0][:crypt_flag_len], crypt_flag)
++        crypted = crypt.crypt('password', e[libuser.SHADOWPASSWORD][0])
++        self.assertEqual(e[libuser.SHADOWPASSWORD], [crypted])
++
++    def testSm3GroupSetpass2(self):
++        # Forcing the non-shadow password to 'x'
++        e = self.a.initGroup('group103_2')
++        e[libuser.GROUPPASSWORD] = '*'
++        e[libuser.SHADOWPASSWORD] = '07ZZy2Pihe/gg'
++        self.a.addGroup(e)
++        del e
++        # shadow module's addGroup forces GROUPPASSWORD to 'x'
++        e = self.a.lookupGroupByName('group103_2')
++        self.assertEqual(e[libuser.GROUPPASSWORD], ['x'])
++        self.assertEqual(e[libuser.SHADOWPASSWORD], ['07ZZy2Pihe/gg'])
++        e[libuser.GROUPPASSWORD] = '*'
++        self.a.modifyGroup(e)
++        del e
++        e = self.a.lookupGroupByName('group103_2')
++        self.assertEqual(e[libuser.GROUPPASSWORD], ['*'])
++        self.assertEqual(e[libuser.SHADOWPASSWORD], ['07ZZy2Pihe/gg'])
++        self.a.setpassGroup(e, 'password', False)
++        self.assertEqual(e[libuser.GROUPPASSWORD], ['x'])
++        self.assertEqual(e[libuser.SHADOWPASSWORD][0][:crypt_flag_len], crypt_flag)
++        crypted = crypt.crypt('password', e[libuser.SHADOWPASSWORD][0])
++        self.assertEqual(e[libuser.SHADOWPASSWORD], [crypted])
++
++    def testSm3GroupSetpass3(self):
++        # Forcing the non-shadow password to 'x'
++        e = self.a.initGroup('group103_3')
++        self.a.addGroup(e)
++        del e
++        e = self.a.lookupGroupByName('group103_3')
++        self.a.setpassGroup(e, 'ad#la03/8da', True)
++        self.assertEqual(e[libuser.GROUPPASSWORD], ['x'])
++        self.assertEqual(e[libuser.SHADOWPASSWORD], ['ad#la03/8da'])
++
++    def testSm3GroupRemovepass1(self):
++        e = self.a.initGroup('group104_1')
++        e[libuser.SHADOWPASSWORD] = '07Js7N.eEhbgs'
++        self.a.addGroup(e)
++        del e
++        e = self.a.lookupGroupByName('group104_1')
++        self.assertEqual(e[libuser.GROUPPASSWORD], ['x'])
++        self.assertEqual(e[libuser.SHADOWPASSWORD], ['07Js7N.eEhbgs'])
++        self.a.removepassGroup(e)
++        self.assertEqual(e[libuser.GROUPPASSWORD], ['x'])
++        self.assertEqual(e[libuser.SHADOWPASSWORD], [''])
++
++    def testSm3GroupRemovepass2(self):
++        e = self.a.initGroup('group104_2')
++        self.a.addGroup(e)
++        del e
++        e = self.a.lookupGroupByName('group104_2')
++        self.a.setpassGroup(e, 'ad#la03/8da', False)
++        self.assertEqual(e[libuser.GROUPPASSWORD], ['x'])
++        self.assertEqual(e[libuser.SHADOWPASSWORD][0][:crypt_flag_len], crypt_flag)
++        self.a.removepassGroup(e)
++        del e
++        e = self.a.lookupGroupByName('group104_2')
++        self.assertEqual(e[libuser.GROUPPASSWORD], ['x'])
++        self.assertEqual(e[libuser.SHADOWPASSWORD], [''])
++
++    def tearDown(self):
++        del self.a
++
++
++if __name__ == '__main__':
++    unittest.main()
+-- 
+1.8.3.1
+
