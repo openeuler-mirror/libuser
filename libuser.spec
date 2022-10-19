@@ -1,6 +1,6 @@
 Name:    libuser
 Version: 0.63
-Release: 4
+Release: 5
 Summary: A user and group account administration library
 License: LGPLv2+
 URL:     https://pagure.io/libuser
@@ -55,10 +55,10 @@ Man pages and other related documents for %{name}
 ./autogen.sh
 %configure --with-ldap --with-selinux --with-html-dir=%{_prefix}/share/gtk-doc/html \
 	PYTHON=%{_bindir}/python3
-make
+make %{?_smp_mflags}
 
 %install
-make install DESTDIR=$RPM_BUILD_ROOT INSTALL='install -p' || :
+make %{?_smp_mflags} install DESTDIR=$RPM_BUILD_ROOT INSTALL='install -p' || :
 
 %find_lang %{name}
 
@@ -104,6 +104,9 @@ python3 -c "import libuser"
 %{_mandir}/man5/*
 
 %changelog
+* Wed Oct 19 2022 fuanan <fuanan3@h-partners.com> - 0.63-5
+- DESC:optimize compilation by running make in parallel
+
 * Thu Jul 28 2022 fuanan <fuanan3@h-partners.com> - 0.63-4
 - Type:requirements
 - ID:NA
