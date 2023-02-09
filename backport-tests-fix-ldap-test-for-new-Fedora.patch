@@ -1,0 +1,64 @@
+From b854e3da65dbf264511579b93c0e001d9ef03371 Mon Sep 17 00:00:00 2001
+From: Tomas Halman <thalman@redhat.com>
+Date: Feb 23 2022 14:18:57 +0000
+Subject: tests: fix ldap test for new Fedora
+
+
+Openldap has changed in fedora and command line option -h is
+no longer available in utilities like ldapadd. Solution here is
+to switch to URI (-H)
+
+Support for bdb backend is dropped, test are using mdb backend since
+this update
+
+---
+
+diff --git a/tests/default_pw_test b/tests/default_pw_test
+index 733c85c..9c76b95 100755
+--- a/tests/default_pw_test
++++ b/tests/default_pw_test
+@@ -69,7 +69,7 @@ get_file_password() # file under $workdir/files, entry name
+ get_ldap_password() # entry filter
+ {
+     echo "Checking $1 ..." >&2
+-    ldapsearch -LLL -h 127.0.0.1 -p "$ldap_port" -x -b 'dc=libuser' "$1" \
++    ldapsearch -LLL -H ldap://127.0.0.1:$ldap_port -x -b 'dc=libuser' "$1" \
+ 	userPassword | sed -n 's/userPassword:: //p'
+ }
+ 
+@@ -103,7 +103,7 @@ for modules in \
+ 	    tests/wait_for_slapd_start "$workdir"/slapd.pid "$ldap_port"
+ 	    slapd_pid=$(cat "$workdir"/slapd.pid)
+ 	    trap 'status=$?; kill $slapd_pid; rm -rf "$workdir"; exit $status' 0
+-	    ldapadd -h 127.0.0.1 -p "$ldap_port" -f "$srcdir/ldap_skel.ldif" -x \
++	    ldapadd -H ldap://127.0.0.1:$ldap_port -f "$srcdir/ldap_skel.ldif" -x \
+ 		-D cn=Manager,dc=libuser -w password
+ 	    ;;
+     esac
+diff --git a/tests/ldap_test b/tests/ldap_test
+index 54609b1..c7ac377 100755
+--- a/tests/ldap_test
++++ b/tests/ldap_test
+@@ -56,7 +56,7 @@ slapd_pid=$(cat "$workdir"/slapd.pid)
+ trap 'status=$?; kill $slapd_pid
+ 	tests/wait_for_slapd_exit "$workdir"/slapd.pid "$ldap_port"
+ 	rm -rf "$workdir"; exit $status' 0
+-ldapadd -h 127.0.0.1 -p "$ldap_port" -f "$srcdir/ldap_skel.ldif" -x \
++ldapadd -H "ldap://127.0.0.1:$ldap_port" -f "$srcdir/ldap_skel.ldif" -x \
+     -D cn=Manager,dc=libuser -w password
+ 
+ 
+diff --git a/tests/slapd.conf.in b/tests/slapd.conf.in
+index 06ef10d..8e49a36 100644
+--- a/tests/slapd.conf.in
++++ b/tests/slapd.conf.in
+@@ -10,7 +10,7 @@ pidfile @WORKDIR@/slapd.pid
+ TLSCertificateFile @WORKDIR@/key.pem
+ TLSCertificateKeyFile @WORKDIR@/key.pem
+ 
+-database bdb
++database mdb
+ suffix "dc=libuser"
+ rootdn "cn=Manager,dc=libuser"
+ rootpw {SSHA}ABgelmLFZQ/OJzVEp3OM5MzWQ9rt3b4F
+
