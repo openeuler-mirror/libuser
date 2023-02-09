@@ -1,6 +1,6 @@
 Name:    libuser
 Version: 0.62
-Release: 22
+Release: 23
 Summary: A user and group account administration library
 License: LGPLv2+
 URL:     https://pagure.io/libuser
@@ -13,6 +13,7 @@ Patch2:    0010-files.c-Init-char-name-to-NULL.patch
 Patch3:    0011-merge_ent_array_duplicates-Only-use-values-if-valid.patch
 Patch4:    0012-editing_open-close-fd-after-we-ve-established-its-va.patch
 Patch5:    libuser-do-not-use-deprecated-flask.h-and-av_permissions.patch
+Patch6:    backport-tests-fix-ldap-test-for-new-Fedora.patch
 
 Patch9000: add-sm3-crypt-support.patch
 
@@ -75,6 +76,7 @@ pushd libuser-%{version}
 %patch3 -p1
 %patch4 -p1
 %patch5 -p1
+%patch6 -p1
 
 %patch9000 -p1
 popd
@@ -107,16 +109,15 @@ make -C python2 install DESTDIR=$RPM_BUILD_ROOT INSTALL='install -p' || :
 %find_lang %{name}
 
 %check
-
-#make -C python2 check || { cat python2/test-suite.log; false; }
-#LC_ALL=C.UTF-8 make -C python3 check \
-#	|| { cat python3/test-suite.log; false; }
-#LD_LIBRARY_PATH=$RPM_BUILD_ROOT/%{_prefix}/%{_lib}:${LD_LIBRARY_PATH}
-#export LD_LIBRARY_PATH
-#cd $RPM_BUILD_ROOT/%{python2_sitearch}
-#python2 -c "import libuser"
-#cd $RPM_BUILD_ROOT/%{python3_sitearch}
-#LC_ALL=C.UTF-8 python3 -c "import libuser"
+make -C python2 check || { cat python2/test-suite.log; false; }
+LC_ALL=C.UTF-8 make -C python3 check \
+	|| { cat python3/test-suite.log; false; }
+LD_LIBRARY_PATH=$RPM_BUILD_ROOT/%{_prefix}/%{_lib}:${LD_LIBRARY_PATH}
+export LD_LIBRARY_PATH
+cd $RPM_BUILD_ROOT/%{python2_sitearch}
+python2 -c "import libuser"
+cd $RPM_BUILD_ROOT/%{python3_sitearch}
+LC_ALL=C.UTF-8 python3 -c "import libuser"
 
 %post
 /sbin/ldconfig
@@ -158,6 +159,9 @@ make -C python2 install DESTDIR=$RPM_BUILD_ROOT INSTALL='install -p' || :
 %{_mandir}/man5/*
 
 %changelog
+* Thu Feb 09 2023 fuanan <fuanan3@h-partners.com> - 0.62-23
+- enable make check
+
 * Fri Oct 29 2021 lujie <lujie42@huawei.com> - 0.62-22
 - add sm3 crypt support
 
